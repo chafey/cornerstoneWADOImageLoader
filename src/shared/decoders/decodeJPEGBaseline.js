@@ -1,11 +1,22 @@
-import JpegImage from '../../../codecs/jpeg.js';
+/**
+ * Decodes an image frame by decoding the provided pixelData and updating the
+ * imageFrame by reference.
+ *
+ * @param {*} imageFrame
+ * @param {*} pixelData
+ */
+async function decodeJPEGBaseline(imageFrame, pixelData) {
+  const JpegImageCodec = await import(
+    /* webpackPrefetch: true, webpackChunkName: "JpegBaseline" */ './../codecs/jpeg.js'
+  );
 
-function decodeJPEGBaseline (imageFrame, pixelData) {
-  // check to make sure codec is loaded
-  if (typeof JpegImage === 'undefined') {
+  console.log('JpegImageCodec', JpegImageCodec);
+
+  if (typeof JpegImageCodec === 'undefined') {
     throw new Error('No JPEG Baseline decoder loaded');
   }
-  const jpeg = new JpegImage();
+
+  const jpeg = new JpegImageCodec();
 
   jpeg.parse(pixelData);
 

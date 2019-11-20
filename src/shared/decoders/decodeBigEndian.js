@@ -1,11 +1,11 @@
-/* eslint no-bitwise: 0 */
-function swap16 (val) {
-  return ((val & 0xFF) << 8) |
-    ((val >> 8) & 0xFF);
-}
-
-
-function decodeBigEndian (imageFrame, pixelData) {
+/**
+ * Decodes an image frame by decoding the provided pixelData and updating the
+ * imageFrame by reference.
+ *
+ * @param {*} imageFrame
+ * @param {*} pixelData
+ */
+function decodeBigEndian(imageFrame, pixelData) {
   if (imageFrame.bitsAllocated === 16) {
     let arrayBuffer = pixelData.buffer;
 
@@ -26,14 +26,18 @@ function decodeBigEndian (imageFrame, pixelData) {
     }
     // Do the byte swap
     for (let i = 0; i < imageFrame.pixelData.length; i++) {
-      imageFrame.pixelData[i] = swap16(imageFrame.pixelData[i]);
+      imageFrame.pixelData[i] = _swap16(imageFrame.pixelData[i]);
     }
-
   } else if (imageFrame.bitsAllocated === 8) {
     imageFrame.pixelData = pixelData;
   }
 
   return imageFrame;
+}
+
+/* eslint no-bitwise: 0 */
+function _swap16(val) {
+  return ((val & 0xff) << 8) | ((val >> 8) & 0xff);
 }
 
 export default decodeBigEndian;

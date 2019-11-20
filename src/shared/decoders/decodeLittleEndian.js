@@ -1,4 +1,11 @@
-function decodeLittleEndian (imageFrame, pixelData) {
+/**
+ * Decodes an image frame by decoding the provided pixelData and updating the
+ * imageFrame by reference.
+ *
+ * @param {*} imageFrame
+ * @param {*} pixelData
+ */
+function decodeLittleEndian(imageFrame, pixelData) {
   let arrayBuffer = pixelData.buffer;
 
   let offset = pixelData.byteOffset;

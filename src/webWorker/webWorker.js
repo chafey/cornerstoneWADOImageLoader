@@ -1,3 +1,7 @@
+// TODO: Not sure if this is necessary, but we probably need it for deflate in dicomParser
+/* eslint-disable-next-line import/extensions */
+import 'pako';
+
 // an object of task handlers
 const taskHandlers = {};
 
@@ -11,7 +15,7 @@ let config;
  * Initialization function that loads additional web workers and initializes them
  * @param data
  */
-function initialize (data) {
+function initialize(data) {
   // console.log('web worker initialize ', data.workerIndex);
   // prevent initialization from happening more than once
   if (initialized) {
@@ -32,53 +36,44 @@ function initialize (data) {
   }
 
   // initialize each task handler
-  Object.keys(taskHandlers).forEach(function (key) {
+  Object.keys(taskHandlers).forEach(function(key) {
     taskHandlers[key].initialize(config.taskConfiguration);
   });
 
+  console.log(1);
   // tell main ui thread that we have completed initialization
   self.postMessage({
     taskType: 'initialize',
     status: 'success',
-    result: {
-    },
-    workerIndex: data.workerIndex
+    result: {},
+    workerIndex: data.workerIndex,
   });
 
   initialized = true;
 }
 
 /**
- * Function exposed to web worker tasks to register themselves
- * @param taskHandler
- */
-export function registerTaskHandler (taskHandler) {
-  if (taskHandlers[taskHandler.taskType]) {
-    console.log('attempt to register duplicate task handler "', taskHandler.taskType, '"');
-
-    return false;
-  }
-  taskHandlers[taskHandler.taskType] = taskHandler;
-  if (initialized) {
-    taskHandler.initialize(config.taskConfiguration);
-  }
-}
-
-/**
  * Function to load a new web worker task with updated configuration
  * @param data
  */
-function loadWebWorkerTask (data) {
+function loadWebWorkerTask(data) {
   config = data.config;
   self.importScripts(data.sourcePath);
 }
 
 /**
- * Web worker message handler - dispatches messages to the registered task handlers
+ * Web worker message handler:
+ * dispatches messages to the registered task handlers
+ *
  * @param msg
  */
-self.onmessage = function (msg) {
-  // console.log('web worker onmessage', msg.data);
+self.onmessage = function(msg) {
+  console.log('!! ~~ web worker onmessage', msg.data);
+
+  if (msg.data.taskType === undefined) {
+    console.warn('Task dispatched with undefined task type');
+    return;
+  }
 
   // handle initialize message
   if (msg.data.taskType === 'initialize') {
@@ -95,23 +90,33 @@ self.onmessage = function (msg) {
   }
 
   // dispatch the message if there is a handler registered for it
-  if (taskHandlers[msg.data.taskType]) {
+  const taskHandler = taskHandlers[msg.data.taskType];
+
+  if (taskHandler) {
+    console.log('HANDLING TASK: ', msg.data.taskType);
+    console.log(taskHandler);
+
     try {
-      taskHandlers[msg.data.taskType].handler(msg.data, function (result, transferList) {
-        self.postMessage({
-          taskType: msg.data.taskType,
-          status: 'success',
-          result,
-          workerIndex: msg.data.workerIndex
-        }, transferList);
+      taskHandler.handler(msg.data, function(result, transferList) {
+        console.log('task handler......... handling');
+        self.postMessage(
+          {
+            taskType: msg.data.taskType,
+            status: 'success',
+            result,
+            workerIndex: msg.data.workerIndex,
+          },
+          transferList
+        );
       });
     } catch (error) {
       console.log(`task ${msg.data.taskType} failed - ${error.message}`);
+      console.log(3);
       self.postMessage({
         taskType: msg.data.taskType,
         status: 'failed',
         result: error.message,
-        workerIndex: msg.data.workerIndex
+        workerIndex: msg.data.workerIndex,
       });
     }
 
@@ -119,11 +124,31 @@ self.onmessage = function (msg) {
   }
 
   // not task handler registered - send a failure message back to ui thread
-  console.log('no task handler for ', msg.data.taskType);
-  console.log(taskHandlers);
   self.postMessage({
     taskType: msg.data.taskType,
     status: 'failed - no task handler registered',
-    workerIndex: msg.data.workerIndex
+    result: 'error message',
+    workerIndex: msg.data.workerIndex,
   });
 };
+
+/**
+ * Function exposed to web worker tasks to register themselves
+ *
+ * @param {*} taskHandler
+ */
+export function registerTaskHandler(taskHandler) {
+  if (taskHandlers[taskHandler.taskType]) {
+    console.log(
+      'attempt to register duplicate task handler "',
+      taskHandler.taskType,
+      '"'
+    );
+
+    return false;
+  }
+  taskHandlers[taskHandler.taskType] = taskHandler;
+  if (initialized) {
+    taskHandler.initialize(config.taskConfiguration);
+  }
+}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- twitter bootstrap CSS stylesheet - included to make things pretty, not needed or used by cornerstone -->
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.css"
+      rel="stylesheet"
+    />
+    <style>
+      .viewport-container {
+        position: relative;
+        color: white;
+        display: inline-block;
+        border-style: solid;
+        border-color: black;
+      }
+      .enabled-element {
+        flex-grow: 1;
+      }
+      .cornerstone-enabled-image {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        cursor: default;
+      }
+    </style>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/cornerstone-core"
+    ></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/dicom-parser@1.8.3/dist/dicomParser.min.js"
+    ></script>
+  </head>
+  <body>
+    <div style="display: flex;">
+      <div
+        class="viewport-container"
+        oncontextmenu="return false"
+        class="disable-selection noIbar"
+        unselectable="on"
+        onselectstart="return false;"
+        onmousedown="return false;"
+      >
+        <div class="enabled-element"></div>
+      </div>
+      <div
+        class="viewport-container"
+        oncontextmenu="return false"
+        class="disable-selection noIbar"
+        unselectable="on"
+        onselectstart="return false;"
+        onmousedown="return false;"
+      >
+        <div class="enabled-element"></div>
+      </div>
+    </div>
+  </body>
+
+  <script>
+    // window.cornerstoneWADOImageLoader.webWorkerManager.setWorkerClass(worker);
+    window.cornerstoneWADOImageLoader.webWorkerManager.initialize({
+      maxWebWorkers: 4,
+      startWebWorkersOnDemand: true,
+      webWorkerTaskPaths: [],
+      taskConfiguration: {
+        decodeTask: {
+          initializeCodecsOnStartup: false,
+          usePDFJS: false,
+          strict: true,
+        },
+      },
+    });
+
+    cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
+    cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+
+    cornerstoneWADOImageLoader.configure({
+      beforeSend: function(xhr) {
+        // Add custom headers here (e.g. auth tokens)
+        //xhr.setRequestHeader('APIKEY', 'my auth token');
+      },
+    });
+
+    const element = document.querySelector('.enabled-element');
+    const element2 = document.querySelectorAll('.enabled-element')[1];
+
+    cornerstone.enable(element);
+    cornerstone.enable(element2);
+
+    cornerstone
+      .loadImage('dicomweb:http://localhost:3000/1.dcm')
+      .then(image => {
+        console.log('image from decoder: ', image);
+        cornerstone.displayImage(element, image);
+
+        // Breaks
+        // const meta = cornerstone.metaData.get('imagePlaneModule', 'dicomweb:http://localhost:3000/1.dcm');
+        // console.log(meta);
+      });
+
+    cornerstone
+      .loadImage('dicomweb:http://localhost:3000/j2kr.dcm')
+      .then(image => {
+        console.log('image from decoder: ', image);
+        cornerstone.displayImage(element2, image);
+
+        const meta = cornerstone.metaData.get(
+          'imagePlaneModule',
+          'dicomweb:http://localhost:3000/j2kr.dcm'
+        );
+        console.log(meta);
+      });
+  </script>
+</html>

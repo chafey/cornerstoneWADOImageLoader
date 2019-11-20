@@ -1,12 +1,20 @@
+// TODO: ripe for code-splitting
 import decodeLittleEndian from './decoders/decodeLittleEndian.js';
 import decodeBigEndian from './decoders/decodeBigEndian.js';
 import decodeRLE from './decoders/decodeRLE.js';
 import decodeJPEGBaseline from './decoders/decodeJPEGBaseline.js';
 import decodeJPEGLossless from './decoders/decodeJPEGLossless.js';
 import decodeJPEGLS from './decoders/decodeJPEGLS.js';
-import decodeJPEG2000 from './decoders/decodeJPEG2000.js';
+import decodeJPEG2000Async from './decoders/decodeJPEG2000Async.js';
 
-function decodeImageFrame (imageFrame, transferSyntax, pixelData, decodeConfig, options) {
+async function decodeImageFrameAsync(
+  imageFrame,
+  transferSyntax,
+  pixelData,
+  decodeConfig,
+  options
+) {
+  console.log('Decoding image frame...........');
   const start = new Date().getTime();
 
   if (transferSyntax === '1.2.840.10008.1.2') {
@@ -44,10 +52,20 @@ function decodeImageFrame (imageFrame, transferSyntax, pixelData, decodeConfig, 
     imageFrame = decodeJPEGLS(imageFrame, pixelData);
   } else if (transferSyntax === '1.2.840.10008.1.2.4.90') {
     // JPEG 2000 Lossless
-    imageFrame = decodeJPEG2000(imageFrame, pixelData, decodeConfig, options);
+    imageFrame = await decodeJPEG2000Async(
+      imageFrame,
+      pixelData,
+      decodeConfig,
+      options
+    );
   } else if (transferSyntax === '1.2.840.10008.1.2.4.91') {
     // JPEG 2000 Lossy
-    imageFrame = decodeJPEG2000(imageFrame, pixelData, decodeConfig, options);
+    imageFrame = await decodeJPEG2000Async(
+      imageFrame,
+      pixelData,
+      decodeConfig,
+      options
+    );
   } else {
     throw new Error(`no decoder for transfer syntax ${transferSyntax}`);
   }
@@ -65,21 +83,28 @@ function decodeImageFrame (imageFrame, transferSyntax, pixelData, decodeConfig, 
    }
    */
 
-  const shouldShift = imageFrame.pixelRepresentation !== undefined && imageFrame.pixelRepresentation === 1;
-  const shift = (shouldShift && imageFrame.bitsStored !== undefined) ? (32 - imageFrame.bitsStored) : undefined;
+  const shouldShift =
+    imageFrame.pixelRepresentation !== undefined &&
+    imageFrame.pixelRepresentation === 1;
+  const shift =
+    shouldShift && imageFrame.bitsStored !== undefined
+      ? 32 - imageFrame.bitsStored
+      : undefined;
 
   if (shouldShift && shift !== undefined) {
     for (let i = 0; i < imageFrame.pixelData.length; i++) {
       // eslint-disable-next-line no-bitwise
-      imageFrame.pixelData[i] = (imageFrame.pixelData[i] << shift >> shift);
+      // eslint-disable-next-line
+      imageFrame.pixelData[i] = (imageFrame.pixelData[i] << shift) >> shift;
     }
   }
 
   const end = new Date().getTime();
 
+  // eslint-disable-next-line
   imageFrame.decodeTimeInMS = end - start;
 
   return imageFrame;
 }
 
-export default decodeImageFrame;
+export default decodeImageFrameAsync;

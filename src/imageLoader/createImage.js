@@ -1,6 +1,6 @@
 import external from '../externalModules.js';
 import getImageFrame from './getImageFrame.js';
-import decodeImageFrame from './decodeImageFrame.js';
+import createDecodeImageFrameTask from './createDecodeImageFrameTask.js';
 import isColorImageFn from './isColorImage.js';
 import convertColorSpace from './convertColorSpace.js';
 import getMinMax from '../shared/getMinMax.js';
@@ -8,14 +8,16 @@ import isJPEGBaseline8BitColor from './isJPEGBaseline8BitColor.js';
 
 let lastImageIdDrawn = '';
 
-function isModalityLUTForDisplay (sopClassUid) {
+function isModalityLUTForDisplay(sopClassUid) {
   // special case for XA and XRF
   // https://groups.google.com/forum/#!searchin/comp.protocols.dicom/Modality$20LUT$20XA/comp.protocols.dicom/UBxhOZ2anJ0/D0R_QP8V2wIJ
-  return sopClassUid !== '1.2.840.10008.5.1.4.1.1.12.1' && // XA
-         sopClassUid !== '1.2.840.10008.5.1.4.1.1.12.2.1'; // XRF
+  return (
+    sopClassUid !== '1.2.840.10008.5.1.4.1.1.12.1' && // XA
+    sopClassUid !== '1.2.840.10008.5.1.4.1.1.12.2.1'
+  ); // XRF
 }
 
-function convertToIntPixelData (floatPixelData) {
+function convertToIntPixelData(floatPixelData) {
   const floatMinMax = getMinMax(floatPixelData);
   const floatRange = Math.abs(floatMinMax.max - floatMinMax.min);
   const intRange = 65535;
@@ -41,7 +43,7 @@ function convertToIntPixelData (floatPixelData) {
     max,
     intPixelData,
     slope,
-    intercept
+    intercept,
   };
 }
 
@@ -50,7 +52,7 @@ function convertToIntPixelData (floatPixelData) {
  * can transfer array buffers but not typed arrays
  * @param imageFrame
  */
-function setPixelDataType (imageFrame) {
+function setPixelDataType(imageFrame) {
   if (imageFrame.bitsAllocated === 32) {
     imageFrame.pixelData = new Float32Array(imageFrame.pixelData);
   } else if (imageFrame.bitsAllocated === 16) {
@@ -64,133 +66,172 @@ function setPixelDataType (imageFrame) {
   }
 }
 
-function createImage (imageId, pixelData, transferSyntax, options) {
-
-  if (!pixelData || !pixelData.length) {
+/**
+ *
+ * @param {*} imageId
+ * @param {*} encodedPixelData
+ * @param {*} transferSyntax
+ * @param {*} options
+ * @returns Promise<Image>
+ */
+// eslint-disable-next-line
+async function createImage(imageId, encodedPixelData, transferSyntax, options) {
+  if (!encodedPixelData || !encodedPixelData.length) {
     return Promise.reject(new Error('The file does not contain image data.'));
   }
 
   const { cornerstone } = external;
   const canvas = document.createElement('canvas');
-  const imageFrame = getImageFrame(imageId);
-  const decodePromise = decodeImageFrame(imageFrame, transferSyntax, pixelData, canvas, options);
+  const encodedImageFrame = getImageFrame(imageId);
 
-  return new Promise((resolve, reject) => {
-    decodePromise.then(function (imageFrame) {
-      const imagePlaneModule = cornerstone.metaData.get('imagePlaneModule', imageId) || {};
-      const voiLutModule = cornerstone.metaData.get('voiLutModule', imageId) || {};
-      const modalityLutModule = cornerstone.metaData.get('modalityLutModule', imageId) || {};
-      const sopCommonModule = cornerstone.metaData.get('sopCommonModule', imageId) || {};
-      const isColorImage = isColorImageFn(imageFrame.photometricInterpretation);
+  console.warn('~~~~', encodedPixelData.length);
 
-      // JPEGBaseline (8 bits) is already returning the pixel data in the right format (rgba)
-      // because it's using a canvas to load and decode images.
-      if (!isJPEGBaseline8BitColor(imageFrame, transferSyntax)) {
-        setPixelDataType(imageFrame);
+  // Grab all of the metadata we may need
+  const imagePlaneModule =
+    cornerstone.metaData.get('imagePlaneModule', imageId) || {};
+  const { windowCenter, windowWidth, voiLUTSequence } =
+    cornerstone.metaData.get('voiLutModule', imageId) || {};
+  const { rescaleIntercept, rescaleSlope, modalityLUTSequence } =
+    cornerstone.metaData.get('modalityLutModule', imageId) || {};
+  const sopCommonModule =
+    cornerstone.metaData.get('sopCommonModule', imageId) || {};
 
-        // convert color space
-        if (isColorImage) {
-          // setup the canvas context
-          canvas.height = imageFrame.rows;
-          canvas.width = imageFrame.columns;
+  // Decode our pixelData/imageFrame
+  const imageFrame = await createDecodeImageFrameTask(
+    encodedImageFrame,
+    transferSyntax,
+    encodedPixelData,
+    canvas,
+    options
+  );
 
-          const context = canvas.getContext('2d');
-          const imageData = context.createImageData(imageFrame.columns, imageFrame.rows);
+  console.log(encodedImageFrame);
+  console.log(imageFrame); // not defined :thinking:
 
-          convertColorSpace(imageFrame, imageData);
-          imageFrame.imageData = imageData;
-          imageFrame.pixelData = imageData.data;
+  // Computed from metadata
+  const isColorImage = isColorImageFn(
+    encodedImageFrame.photometricInterpretation
+  );
+  const hasModalityLut =
+    modalityLUTSequence &&
+    modalityLUTSequence.length > 0 &&
+    isModalityLUTForDisplay(sopCommonModule.sopClassUID);
+  const hasVoiLut = voiLUTSequence && voiLUTSequence.length > 0;
 
-          // calculate smallest and largest PixelValue of the converted pixelData
-          const minMax = getMinMax(imageFrame.pixelData);
+  // encodedPixelData (dataSet) becomes `undefined` on `createDecodeImageFrameTask`
+  // encodedPixelData --> imageFrame.pixelData (decoded arrayBuffer)
+  // imageFrame.pixelData --> setPixelDataType --> (decoded pixelData)
 
-          imageFrame.smallestPixelValue = minMax.min;
-          imageFrame.largestPixelValue = minMax.max;
-        }
+  // JPEGBaseline (8 bits) is already returning the pixel data in the right format (rgba)
+  // because it's using a canvas to load and decode images.
+  if (!isJPEGBaseline8BitColor(imageFrame, transferSyntax)) {
+    setPixelDataType(imageFrame);
+
+    // convert color space
+    if (isColorImage) {
+      _convertColorSpace(canvas, imageFrame);
+    }
+  }
+
+  console.warn('~~~~', encodedPixelData.length);
+  console.warn('~~~~ dec: ', imageFrame.pixelData.length);
+
+  const image = {
+    imageId,
+    color: isColorImage,
+    columnPixelSpacing: imagePlaneModule.columnPixelSpacing,
+    columns: imageFrame.columns,
+    height: imageFrame.rows,
+    intercept: rescaleIntercept ? rescaleIntercept : 0,
+    invert: imageFrame.photometricInterpretation === 'MONOCHROME1',
+    minPixelValue: imageFrame.smallestPixelValue,
+    maxPixelValue: imageFrame.largestPixelValue,
+    rowPixelSpacing: imagePlaneModule.rowPixelSpacing,
+    rows: imageFrame.rows,
+    sizeInBytes: imageFrame.pixelData.length,
+    slope: rescaleSlope ? rescaleSlope : 1,
+    width: imageFrame.columns,
+    windowCenter: windowCenter ? windowCenter[0] : undefined,
+    windowWidth: windowWidth ? windowWidth[0] : undefined,
+    decodeTimeInMS: imageFrame.decodeTimeInMS,
+    floatPixelData: undefined,
+    //
+    modalityLUT: hasModalityLut ? modalityLUTSequence[0] : undefined,
+    voiLUT: hasVoiLut ? voiLUTSequence[0] : undefined,
+  };
+
+  // add function to return pixel data
+  if (imageFrame.pixelData instanceof Float32Array) {
+    const floatPixelData = imageFrame.pixelData;
+    const results = convertToIntPixelData(floatPixelData);
+
+    image.minPixelValue = results.min;
+    image.maxPixelValue = results.max;
+    image.slope = results.slope;
+    image.intercept = results.intercept;
+    image.floatPixelData = floatPixelData;
+    image.getPixelData = () => results.intPixelData;
+  } else {
+    image.getPixelData = () => imageFrame.pixelData;
+  }
+
+  if (isColorImage) {
+    image.getCanvas = function() {
+      if (lastImageIdDrawn === imageId) {
+        return canvas;
       }
 
-      const image = {
-        imageId,
-        color: isColorImage,
-        columnPixelSpacing: imagePlaneModule.columnPixelSpacing,
-        columns: imageFrame.columns,
-        height: imageFrame.rows,
-        intercept: modalityLutModule.rescaleIntercept ? modalityLutModule.rescaleIntercept : 0,
-        invert: imageFrame.photometricInterpretation === 'MONOCHROME1',
-        minPixelValue: imageFrame.smallestPixelValue,
-        maxPixelValue: imageFrame.largestPixelValue,
-        rowPixelSpacing: imagePlaneModule.rowPixelSpacing,
-        rows: imageFrame.rows,
-        sizeInBytes: imageFrame.pixelData.length,
-        slope: modalityLutModule.rescaleSlope ? modalityLutModule.rescaleSlope : 1,
-        width: imageFrame.columns,
-        windowCenter: voiLutModule.windowCenter ? voiLutModule.windowCenter[0] : undefined,
-        windowWidth: voiLutModule.windowWidth ? voiLutModule.windowWidth[0] : undefined,
-        decodeTimeInMS: imageFrame.decodeTimeInMS,
-        floatPixelData: undefined
-      };
+      canvas.height = image.rows;
+      canvas.width = image.columns;
+      const context = canvas.getContext('2d');
 
-      // add function to return pixel data
-      if (imageFrame.pixelData instanceof Float32Array) {
-        const floatPixelData = imageFrame.pixelData;
-        const results = convertToIntPixelData(floatPixelData);
+      context.putImageData(imageFrame.imageData, 0, 0);
+      lastImageIdDrawn = imageId;
 
-        image.minPixelValue = results.min;
-        image.maxPixelValue = results.max;
-        image.slope = results.slope;
-        image.intercept = results.intercept;
-        image.floatPixelData = floatPixelData;
-        image.getPixelData = () => results.intPixelData;
-      } else {
-        image.getPixelData = () => imageFrame.pixelData;
-      }
+      return canvas;
+    };
 
-      if (image.color) {
-        image.getCanvas = function () {
-          if (lastImageIdDrawn === imageId) {
-            return canvas;
-          }
+    image.windowWidth = 255;
+    image.windowCenter = 127;
+  }
 
-          canvas.height = image.rows;
-          canvas.width = image.columns;
-          const context = canvas.getContext('2d');
+  // set the ww/wc to cover the dynamic range of the image if no values are supplied
+  if (image.windowCenter === undefined || image.windowWidth === undefined) {
+    const maxVoi = image.maxPixelValue * image.slope + image.intercept;
+    const minVoi = image.minPixelValue * image.slope + image.intercept;
 
-          context.putImageData(imageFrame.imageData, 0, 0);
-          lastImageIdDrawn = imageId;
+    image.windowWidth = maxVoi - minVoi;
+    image.windowCenter = (maxVoi + minVoi) / 2;
+  }
 
-          return canvas;
-        };
-      }
+  return image;
+}
 
-      // Modality LUT
-      if (modalityLutModule.modalityLUTSequence &&
-        modalityLutModule.modalityLUTSequence.length > 0 &&
-        isModalityLUTForDisplay(sopCommonModule.sopClassUID)) {
-        image.modalityLUT = modalityLutModule.modalityLUTSequence[0];
-      }
+/**
+ *
+ * @param {*} canvas
+ * @param {*} imageFrame
+ */
+function _convertColorSpace(canvas, imageFrame) {
+  // setup the canvas context
+  canvas.height = imageFrame.rows;
+  canvas.width = imageFrame.columns;
 
-      // VOI LUT
-      if (voiLutModule.voiLUTSequence &&
-        voiLutModule.voiLUTSequence.length > 0) {
-        image.voiLUT = voiLutModule.voiLUTSequence[0];
-      }
+  const context = canvas.getContext('2d');
+  const imageData = context.createImageData(
+    imageFrame.columns,
+    imageFrame.rows
+  );
 
-      if (image.color) {
-        image.windowWidth = 255;
-        image.windowCenter = 127;
-      }
+  convertColorSpace(imageFrame, imageData);
+  imageFrame.imageData = imageData;
+  imageFrame.pixelData = imageData.data;
 
-      // set the ww/wc to cover the dynamic range of the image if no values are supplied
-      if (image.windowCenter === undefined || image.windowWidth === undefined) {
-        const maxVoi = image.maxPixelValue * image.slope + image.intercept;
-        const minVoi = image.minPixelValue * image.slope + image.intercept;
+  // calculate smallest and largest PixelValue of the converted pixelData
+  const minMax = getMinMax(imageFrame.pixelData);
 
-        image.windowWidth = maxVoi - minVoi;
-        image.windowCenter = (maxVoi + minVoi) / 2;
-      }
-      resolve(image);
-    }, reject);
-  });
+  imageFrame.smallestPixelValue = minMax.min;
+  imageFrame.largestPixelValue = minMax.max;
 }
 
 export default createImage;
