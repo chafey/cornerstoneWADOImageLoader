@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <!-- twitter bootstrap CSS stylesheet - included to make things pretty, not needed or used by cornerstone -->
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
+      integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+      crossorigin="anonymous"
+    />
+    <style>
+      .cornerstone-enabled-image {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        cursor: default;
+      }
+    </style>
+
+    <!-- include the cornerstone library -->
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/cornerstone-core"
+    ></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/cornerstone-math"
+    ></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/cornerstone-tools"
+    ></script>
+    <script type="text/javascript" src="https://unpkg.com/hammerjs"></script>
+
+    <!-- include the dicomParser library as the WADO image loader depends on it -->
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/dicom-parser@1.8.3/dist/dicomParser.min.js"
+    ></script>
+  </head>
+  <body>
+    <div class="container">
+      <div class="page-header">
+        <h1>
+          Example of displaying a WADO-RS RetreiveFrame response using
+          Cornerstone
+        </h1>
+        <p class="lead">
+          Enter a WADO-RS URL to a SOP Instance.
+        </p>
+      </div>
+
+      <div id="loadProgress">Image Load Progress:</div>
+
+      <div class="row">
+        <form id="form" class="form-horizontal">
+          <div class="form-group">
+            <label class="control-label col-sm-1" for="apikey">APIKEY</label>
+            <div class="col-sm-8">
+              <input
+                class="form-control"
+                type="text"
+                id="apikey"
+                placeholder="APIKEY"
+                value=""
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="control-label col-sm-1" for="wadoURL">URL</label>
+            <div class="col-sm-8">
+              https://api.hackathon.siim.org/dicomweb/studies/1.3.6.1.4.1.14519.5.2.1.7777.9002.198875685720513246512710453733/series/1.3.6.1.4.1.14519.5.2.1.7777.9002.207203214132667549392101803048/instances/1.3.6.1.4.1.14519.5.2.1.7777.9002.327873213718058651550666129029/frames/1
+              <input
+                class="form-control"
+                type="text"
+                id="wadoURL"
+                placeholder="Enter WADO URL"
+                value="https://raw.githubusercontent.com/cornerstonejs/cornerstoneWADOImageLoader/master/testImages/wadors"
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="col-sm-3">
+              <button
+                class="form-control"
+                type="button"
+                id="downloadAndView"
+                class="btn btn-primary"
+              >
+                Download and View
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div
+        style="width:512px;height:512px;position:relative;color: white;display:inline-block;border-style:solid;border-color:black;"
+        oncontextmenu="return false"
+        class="disable-selection noIbar"
+        unselectable="on"
+        onselectstart="return false;"
+        onmousedown="return false;"
+      >
+        <div
+          id="dicomImage"
+          style="width:512px;height:512px;top:0px;left:0px; position:absolute"
+        ></div>
+      </div>
+    </div>
+    <script>
+      cornerstoneTools.external.cornerstone = cornerstone;
+      cornerstoneTools.external.Hammer = Hammer;
+      cornerstoneTools.external.cornerstoneMath = cornerstoneMath;
+      cornerstoneTools.init();
+
+      try {
+        window.cornerstoneWADOImageLoader.webWorkerManager.initialize({
+          maxWebWorkers: 4,
+          startWebWorkersOnDemand: true,
+          webWorkerTaskPaths: [],
+          taskConfiguration: {
+            decodeTask: {
+              initializeCodecsOnStartup: false,
+              usePDFJS: false,
+              strict: true,
+            },
+          },
+        });
+      } catch (error) {
+        throw new Error('cornerstoneWADOImageLoader is not loaded');
+      }
+
+      cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+
+      cornerstoneWADOImageLoader.configure({
+        beforeSend: function(xhr) {
+          // Add custom headers here (e.g. auth tokens)
+          const apiKey = document.getElementById('apikey').value;
+          if (apiKey && apiKey.length) {
+            xhr.setRequestHeader('APIKEY', apiKey);
+          }
+        },
+      });
+
+      let loaded = false;
+
+      function loadAndViewImage(imageId) {
+        const element = document.getElementById('dicomImage');
+
+        cornerstone.loadImage(imageId).then(
+          function(image) {
+            console.log(image);
+            const viewport = cornerstone.getDefaultViewportForImage(
+              element,
+              image
+            );
+            cornerstone.displayImage(element, image, viewport);
+            if (loaded === false) {
+              cornerstoneTools.addTool(cornerstoneTools.WwwcTool);
+              cornerstoneTools.addTool(cornerstoneTools.PanTool);
+              cornerstoneTools.addTool(cornerstoneTools.ZoomTool);
+              cornerstoneTools.addTool(cornerstoneTools.ZoomMouseWheelTool);
+
+              cornerstoneTools.setToolActive('Wwwc', { mouseButtonMask: 1 });
+              cornerstoneTools.setToolActive('Pan', { mouseButtonMask: 2 });
+              cornerstoneTools.setToolActive('Zoom', { mouseButtonMask: 4 });
+              cornerstoneTools.setToolActive('ZoomMouseWheel', {});
+              loaded = true;
+            }
+          },
+          function(err) {
+            alert(err);
+          }
+        );
+      }
+
+      function getImageFrameURI(metadataURI, metadata) {
+        // Use the BulkDataURI if present int the metadata
+        if (metadata['7FE00010'] && metadata['7FE00010'].BulkDataURI) {
+          return metadata['7FE00010'].BulkDataURI;
+        }
+
+        // fall back to using frame #1
+        return metadataURI + '/frames/1';
+      }
+
+      function downloadAndView() {
+        const url = document.getElementById('wadoURL').value;
+        const metadataURI = url + '/metadata';
+
+        const xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            // Make sure it's a JSON document
+            data = JSON.parse(this.responseText);
+
+            console.log(data);
+
+            const metadata = data[0];
+            const imageFrameURI = getImageFrameURI(metadataURI, metadata);
+            const imageId = 'wadors:' + imageFrameURI;
+
+            cornerstoneWADOImageLoader.wadors.metaDataManager.add(
+              imageId,
+              metadata
+            );
+
+            // image enable the dicomImage element and activate a few tools
+            loadAndViewImage(imageId);
+          }
+        };
+
+        xhr.open('GET', metadataURI, true);
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.send();
+      }
+
+      const element = document.getElementById('dicomImage');
+      cornerstone.enable(element);
+
+      document
+        .getElementById('downloadAndView')
+        .addEventListener('click', function() {
+          downloadAndView();
+        });
+
+      const form = document.getElementById('form');
+      form.addEventListener('submit', function() {
+        downloadAndView();
+        return false;
+      });
+
+      const handleImageLoadProgress = function(imageLoadProgressEvent = {}) {
+        const loadProgress = document.getElementById('loadProgress');
+        loadProgress.textContent =
+          'Image Load Progress: ' +
+          imageLoadProgressEvent.detail.percentComplete;
+      };
+
+      cornerstone.events.addEventListener(
+        'cornerstoneimageloadprogress',
+        handleImageLoadProgress
+      );
+    </script>
+  </body>
+</html>

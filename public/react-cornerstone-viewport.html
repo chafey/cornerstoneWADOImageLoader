@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script type="text/javascript">
+      window.process = {};
+      window.process.env = {};
+      window.process.env.NODE_ENV = 'development';
+      console.log(process);
+    </script>
+    <!-- Peer deps for cornerstone-wado-image-loader -->
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/cornerstone-core"
+    ></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/dicom-parser@1.8.3/dist/dicomParser.min.js"
+    ></script>
+    <!-- Peer deps for react-cornerstone-viewport -->
+    <script
+      src="https://unpkg.com/react@16/umd/react.development.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"
+      crossorigin
+    ></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/cornerstone-math"
+    ></script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/cornerstone-tools"
+    ></script>
+    <script type="text/javascript" src="https://unpkg.com/hammerjs"></script>
+  </head>
+  <body>
+    <!-- Injected Scripts Will Be Here -->
+    <div id="app" style="width: 512px; height: 512px; margin: 0 auto;"></div>
+
+    <!-- Runs after all imports -->
+    <script>
+      // CS Tools Setup
+      cornerstoneTools.external.cornerstone = cornerstone;
+      cornerstoneTools.external.Hammer = Hammer;
+      cornerstoneTools.external.cornerstoneMath = cornerstoneMath;
+      cornerstoneTools.init();
+
+      window.cornerstoneWADOImageLoader.webWorkerManager.initialize({
+        maxWebWorkers: 4,
+        startWebWorkersOnDemand: true,
+        webWorkerTaskPaths: [],
+        taskConfiguration: {
+          decodeTask: {
+            initializeCodecsOnStartup: false,
+            usePDFJS: false,
+            strict: true,
+          },
+        },
+      });
+
+      cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
+      cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+
+      cornerstoneWADOImageLoader.configure({
+        beforeSend: function(xhr) {
+          // Add custom headers here (e.g. auth tokens)
+          // xhr.setRequestHeader('APIKEY', 'my auth token');
+        },
+      });
+    </script>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/react-cornerstone-viewport"
+    ></script>
+    <script type="text/javascript">
+      const props = {
+        tools: [
+          // Mouse
+          {
+            name: 'Wwwc',
+            mode: 'active',
+            modeOptions: { mouseButtonMask: 1 },
+          },
+          {
+            name: 'Zoom',
+            mode: 'active',
+            modeOptions: { mouseButtonMask: 2 },
+          },
+          {
+            name: 'Pan',
+            mode: 'active',
+            modeOptions: { mouseButtonMask: 4 },
+          },
+          // Scroll
+          { name: 'StackScrollMouseWheel', mode: 'active' },
+          // Touch
+          { name: 'PanMultiTouch', mode: 'active' },
+          { name: 'ZoomTouchPinch', mode: 'active' },
+          { name: 'StackScrollMultiTouch', mode: 'active' },
+        ],
+        imageIds: [
+          'dicomweb:http://localhost:3000/test-images/j2kr.dcm',
+          'dicomweb:http://localhost:3000/test-images/1.dcm',
+        ],
+      };
+
+      var nodes = [];
+      var render = function(component, props, targetNode, callback) {
+        var reactElement = React.createElement(component, props, null);
+        ReactDOM.render(reactElement, targetNode, callback);
+        nodes.push(targetNode);
+        return reactElement;
+      };
+
+      const CornerstoneViewport = window['react-cornerstone-viewport'].default;
+      const AppElement = document.querySelector('#app');
+
+      render(CornerstoneViewport, props, AppElement, () => {});
+    </script>
+  </body>
+</html>

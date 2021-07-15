@@ -1,4 +1,4 @@
-import CharLS from '../../../codecs/charLS-FixedMemory-browser.js';
+import CharLS from '../../codecs/charLS-FixedMemory-browser.js';
 
 let charLS;
 
