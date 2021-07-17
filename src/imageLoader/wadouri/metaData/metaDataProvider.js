@@ -40,7 +40,11 @@ function metaDataProvider(type, imageId) {
     const imageOrientationPatient = getNumberValues(dataSet, 'x00200037', 6);
     const imagePositionPatient = getNumberValues(dataSet, 'x00200032', 3);
     const pixelSpacing = getNumberValues(dataSet, 'x00280030', 2);
-
+    
+    if(!pixelSpacing) {
+      pixelSpacing = getNumberValues(dataSet, 'x00181164', 2);
+    }
+    
     let columnPixelSpacing = null;
 
     let rowPixelSpacing = null;
