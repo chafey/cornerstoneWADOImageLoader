@@ -149,6 +149,37 @@ function metaDataProvider(type, imageId) {
   if (type === 'overlayPlaneModule') {
     return getOverlayPlaneModule(dataSet);
   }
+
+  if (type === 'multiframeModule') {
+    return {
+      numberOfFrames: dataSet.floatString('x00280008'), // Number of frames in a Multi-frame Image
+      frameIncrementPointer: dataSet.attributeTag('x00280009') // Contains the Data Element Tag of the attribute that is used as the frame increment in Multi-frame pixel data
+    };
+  }
+
+  if (type === 'cineModule') {
+    const frameTimeVector = [];
+    const vecSize = dataSet.numStringValues('x00181065');
+    if (vecSize && vecSize > 0) {
+      for (let i = 0; i < vecSize; i++) {
+        frameTimeVector.push(dataSet.floatString('x00181065', i));
+      }
+    }
+
+    return {
+      preferredPlaybackSequencing: dataSet.intString('x00181244'), // Describes the preferred playback sequencing for a multi-frame image.
+      frameTime: dataSet.floatString('x00181063'), // Nominal time (in msec) per individual frame. Required if Frame Increment Pointer (0028,0009) points to Frame Time.
+      frameTimeVector, // An array that contains the real time increments (in msec) between frames for a Multi-frame image. Required if Frame Increment Pointer (0028,0009) points to Frame Time Vector.
+      startTrim: dataSet.intString('x00082142'), // The frame number of the first frame of the Multi-frame image to be displayed.
+      stopTrim: dataSet.intString('x00082143'), // The Frame Number of the last frame of a Multi-frame image to be displayed.
+      recommendedDisplayFrameRate: dataSet.intString('x0008,2144'), //Recommended rate at which the frames of a Multi-frame image should be displayed in frames/second.
+      cineRate: dataSet.intString('x00180040'), // Number of frames per second.
+      frameDelay: dataSet.floatString('x00181066'), // Time (in msec) from Content Time (0008,0033) to the start of the first frame in a Multi-frame image.
+      imageTriggerDelay: dataSet.floatString('x00181067'), // Delay time in milliseconds from trigger (e.g., X-Ray on pulse) to the first frame of a Multi-frame image.
+      effectiveDuration: dataSet.floatString('x00180072'), // Total time in seconds that data was actually taken for the entire Multi-frame image.
+      actualFrameDuration: dataSet.intString('x00181242') // Elapsed time of data acquisition in msec per each frame.
+    };
+  }
 }
 
 export default metaDataProvider;
