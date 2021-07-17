@@ -31,42 +31,49 @@ function loadImageFromPromise(
   imageLoadObject.promise = new Promise((resolve, reject) => {
     dataSetPromise.then(
       (dataSet /* , xhr*/) => {
-        const pixelData = getPixelData(dataSet, frame);
-        const transferSyntax = dataSet.string('x00020010');
-        const loadEnd = new Date().getTime();
-        const imagePromise = createImage(
-          imageId,
-          pixelData,
-          transferSyntax,
-          options
-        );
+        try {
+          const pixelData = getPixelData(dataSet, frame);
+          const transferSyntax = dataSet.string('x00020010');
+          const loadEnd = new Date().getTime();
+          const imagePromise = createImage(
+            imageId,
+            pixelData,
+            transferSyntax,
+            options
+          );
 
-        addDecache(imageLoadObject, imageId);
+          addDecache(imageLoadObject, imageId);
 
-        imagePromise.then(
-          image => {
-            image.data = dataSet;
-            image.sharedCacheKey = sharedCacheKey;
-            const end = new Date().getTime();
+          imagePromise.then(
+            image => {
+              image.data = dataSet;
+              image.sharedCacheKey = sharedCacheKey;
+              const end = new Date().getTime();
 
-            image.loadTimeInMS = loadEnd - start;
-            image.totalTimeInMS = end - start;
-            if (
-              callbacks !== undefined &&
-              callbacks.imageDoneCallback !== undefined
-            ) {
-              callbacks.imageDoneCallback(image);
+              image.loadTimeInMS = loadEnd - start;
+              image.totalTimeInMS = end - start;
+              if (
+                callbacks !== undefined &&
+                callbacks.imageDoneCallback !== undefined
+              ) {
+                callbacks.imageDoneCallback(image);
+              }
+              resolve(image);
+            },
+            function(error) {
+              // Reject the error, and the dataSet
+              reject({
+                error,
+                dataSet,
+              });
             }
-            resolve(image);
-          },
-          function(error) {
-            // Reject the error, and the dataSet
-            reject({
-              error,
-              dataSet,
-            });
-          }
-        );
+          );
+        } catch (error) {
+          reject({
+            error,
+            dataSet,
+          });
+        }
       },
       function(error) {
         // Reject the error
