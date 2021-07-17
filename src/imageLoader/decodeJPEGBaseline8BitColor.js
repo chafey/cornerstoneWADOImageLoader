@@ -44,27 +44,32 @@ function decodeJPEGBaseline8BitColor(imageFrame, pixelData, canvas) {
       const img = new Image();
 
       img.onload = function() {
-        canvas.height = img.height;
-        canvas.width = img.width;
-        imageFrame.rows = img.height;
-        imageFrame.columns = img.width;
-        const context = canvas.getContext('2d');
+        try {
+          canvas.height = img.height;
+          canvas.width = img.width;
+          imageFrame.rows = img.height;
+          imageFrame.columns = img.width;
+          const context = canvas.getContext('2d');
 
-        context.drawImage(this, 0, 0);
-        const imageData = context.getImageData(0, 0, img.width, img.height);
-        const end = new Date().getTime();
+          context.drawImage(this, 0, 0);
+          const imageData = context.getImageData(0, 0, img.width, img.height);
+          const end = new Date().getTime();
 
-        imageFrame.pixelData = imageData.data;
-        imageFrame.imageData = imageData;
-        imageFrame.decodeTimeInMS = end - start;
+          imageFrame.pixelData = imageData.data;
+          imageFrame.imageData = imageData;
+          imageFrame.decodeTimeInMS = end - start;
 
-        // calculate smallest and largest PixelValue
-        const minMax = getMinMax(imageFrame.pixelData);
+          // calculate smallest and largest PixelValue
+          const minMax = getMinMax(imageFrame.pixelData);
 
-        imageFrame.smallestPixelValue = minMax.min;
-        imageFrame.largestPixelValue = minMax.max;
+          imageFrame.smallestPixelValue = minMax.min;
+          imageFrame.largestPixelValue = minMax.max;
 
-        resolve(imageFrame);
+          resolve(imageFrame);
+        }
+        catch(error) {
+          reject(error);
+        }
       };
 
       img.onerror = function(error) {
